@@ -26,11 +26,11 @@ def load_data():
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     
-    # 全カラム名を強制正規化
+    # 全カラム名を正規化し、土日祝を完全に詰める（reset_index）
     df.columns = [str(c).lower().capitalize() for c in df.columns]
     df = df.dropna(subset=['Close']).reset_index()
     
-    # 【最重要】名前が何であれ、0番目の列（日付）を "TS" に固定
+    # 0番目の列（日付）を "TS" に固定
     df.rename(columns={df.columns[0]: "TS"}, inplace=True)
     return df
 
@@ -60,6 +60,7 @@ def get_report(price, t, acc, prob):
     if t >= 85 and acc < 0: c = "OVER 85! SNIPER SHORT READY!"
     elif acc >= 5.0: c = "★ MAC POWER! GO GO! ★"
     elif t >= 75 and acc < 0: c = "LEVEL 75. Fading. Short?"
+    elif t <= 30: c = "ABYSS AREA. Watch for Rebound." # 30以下の進言追加
     elif t > 70: c = "Overheated. Prepare Sniper."
     else: c = "Sideways Truth. Wait."
     return f"{p_rep}\n{d_rep}\n{a_rep}\n [CONSULT] {c}"
@@ -70,20 +71,36 @@ st.code(get_report(latest['Close'], latest['T_Score'], latest['Accel'], latest['
 
 fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(15, 12), sharex=True, gridspec_kw={'height_ratios': [2.2, 1, 1]})
 
-# 土日を詰めるためIndex（連番）を使用
 idx = df.index
-ax1.plot(idx, df['Close'], color='black', linewidth=1); ax1.plot(idx, df['MA25'], color='orange', linewidth=2)
-ax1.grid(True, alpha=0.3); ax1.yaxis.set_major_formatter(mticker.StrMethodFormatter('{x:,.0f}'))
+# ax1: Price & MA
+ax1.plot(idx, df['Close'], color='black', linewidth=1, label='Price')
+ax1.plot(idx, df['MA25'], color='orange', linewidth=2, label='25-Line')
+ax1.grid(True, alpha=0.3)
+ax1.yaxis.set_major_formatter(mticker.StrMethodFormatter('{x:,.0f}'))
 
-ax2.plot(idx, df['T_Score'], color='blue'); ax2.axhline(75, color='red'); ax2.axhline(50, color='gray', alpha=0.5)
-ax2.fill_between(idx, 75, 100, color='red', alpha=0.1); ax2.grid(True, alpha=0.3)
+# ax2: T-Score (おっちゃんの意図を完全復活)
+ax2.plot(idx, df['T_Score'], color='blue', linewidth=1.5)
+# 上限サイン
+ax2.axhline(75, color='red', linestyle='-', linewidth=2)
+ax2.fill_between(idx, 75, 100, color='red', alpha=0.1)
+# センターライン
+ax2.axhline(50, color='gray', alpha=0.5)
+# 下限サイン（ここを復活！）
+ax2.axhline(30, color='green', linestyle='--', linewidth=2) 
+ax2.fill_between(idx, 10, 35, color='green', alpha=0.1) # 緑の薄い塗り
+ax2.set_ylabel("T-Score")
+ax2.set_ylim(20, 95) # 視認性を高めるための固定
+ax2.grid(True, alpha=0.3)
 
+# ax3: Accel Power
 ax3.bar(idx, df['Accel'], color=['red' if x > 0 else 'blue' for x in df['Accel']], alpha=0.7)
-ax3.axhline(0, color='black', linewidth=1); ax3.grid(True, alpha=0.3)
+ax3.axhline(0, color='black', linewidth=1)
+ax3.grid(True, alpha=0.3)
 
-# 【ここが修正点】名前ではなく "TS" カラムを確実に参照
+# X軸ラベル
 t_idx = np.linspace(0, len(df)-1, 10, dtype=int)
 ax3.set_xticks(t_idx)
 ax3.set_xticklabels([pd.to_datetime(df["TS"].iloc[i]).strftime('%m/%d %H:%M') for i in t_idx], rotation=45)
 
 st.pyplot(fig)
+
